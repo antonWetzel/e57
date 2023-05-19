@@ -4,14 +4,14 @@
 
 #![forbid(unsafe_code)]
 #![deny(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    clippy::large_stack_arrays,
-    clippy::large_types_passed_by_value
+	clippy::unwrap_used,
+	clippy::expect_used,
+	clippy::panic,
+	clippy::large_stack_arrays,
+	clippy::large_types_passed_by_value
 )]
 
-mod bitpack;
+pub mod bitpack;
 mod blob;
 mod bounds;
 mod bs_read;
