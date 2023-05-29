@@ -1,5 +1,6 @@
 use crate::error::Converter;
 use crate::error::WRONG_OFFSET;
+use crate::paged_reader::PagedReader;
 use crate::Error;
 use crate::Result;
 use std::io::Read;
@@ -14,9 +15,11 @@ pub struct CompressedVectorSectionHeader {
 }
 
 impl CompressedVectorSectionHeader {
-	pub const SIZE: u64 = 32;
+	pub const SIZE: usize = 32;
 
-	pub fn read(reader: &mut dyn Read) -> Result<CompressedVectorSectionHeader> {
+	pub fn read<T: std::io::Read + std::io::Seek>(
+		reader: &mut PagedReader<T>,
+	) -> Result<CompressedVectorSectionHeader> {
 		let mut buffer = [0_u8; Self::SIZE as usize];
 		reader
 			.read_exact(&mut buffer)

@@ -7,14 +7,14 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
 /// Describes a record inside a E57 file with name and data type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct Record {
 	pub name:      RecordName,
 	pub data_type: RecordDataType,
 }
 
 /// Basic primtive E57 data types that are used for the different point attributes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum RecordDataType {
 	/// 32-bit IEEE 754-2008 floating point value.
 	Single { min: Option<f32>, max: Option<f32> },
@@ -27,7 +27,7 @@ pub enum RecordDataType {
 }
 
 /// Used to describe the prototype records with all attributes that exit in the point cloud.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy)]
 pub enum RecordName {
 	/// Cartesian X coordinate (in meters).
 	CartesianX,

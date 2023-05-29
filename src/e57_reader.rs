@@ -1,4 +1,3 @@
-use crate::blob::extract_blob;
 use crate::error::Converter;
 use crate::images::images_from_document;
 use crate::paged_reader::PagedReader;
@@ -20,6 +19,7 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
+use std::str::from_utf8;
 
 const MAX_XML_SIZE: usize = 1024 * 1024 * 10;
 
@@ -27,7 +27,6 @@ const MAX_XML_SIZE: usize = 1024 * 1024 * 10;
 pub struct E57Reader<T: Read + Seek> {
 	reader:      PagedReader<T>,
 	header:      Header,
-	xml:         String,
 	root:        Root,
 	pointclouds: Vec<PointCloud>,
 	images:      Vec<Image>,
@@ -53,11 +52,9 @@ impl<T: Read + Seek> E57Reader<T> {
 		let root = root_from_document(&document)?;
 		let pointclouds = pointclouds_from_document(&document)?;
 		let images = images_from_document(&document)?;
-
 		Ok(Self {
 			reader,
 			header,
-			xml,
 			root,
 			pointclouds,
 			images,
@@ -67,11 +64,6 @@ impl<T: Read + Seek> E57Reader<T> {
 	/// Returns the contents of E57 binary file header structure.
 	pub fn header(&self) -> Header {
 		self.header.clone()
-	}
-
-	/// Returns the XML section of the E57 file.
-	pub fn xml(&self) -> &str {
-		&self.xml
 	}
 
 	/// Returns format name stored in the XML section.
@@ -99,11 +91,6 @@ impl<T: Read + Seek> E57Reader<T> {
 		self.images.clone()
 	}
 
-	/// Writes the content of a blob to the supplied writer and returns the number of written bytes.
-	pub fn blob(&mut self, blob: &Blob, writer: &mut dyn Write) -> Result<u64> {
-		extract_blob(&mut self.reader, blob, writer)
-	}
-
 	/// Returns the optional creation date and time of the file.
 	pub fn creation(&self) -> Option<DateTime> {
 		self.root.creation.clone()
@@ -118,45 +105,6 @@ impl<T: Read + Seek> E57Reader<T> {
 	/// See also: <https://www.ogc.org/standard/wkt-crs/>
 	pub fn coordinate_metadata(&self) -> Option<&str> {
 		self.root.coordinate_metadata.as_deref()
-	}
-
-	/// Iterate over an reader to check an E57 file for CRC errors.
-	///
-	/// This standalone function does only the minimal parsing required
-	/// to get the E57 page size and without any other checks or validation.
-	/// After that it will CRC-validate the whole file.
-	/// It will not read or check any other file header and XML data!
-	/// This method returns the page size of the E57 file.
-	pub fn validate_crc(mut reader: T) -> Result<u64> {
-		let page_size = Self::get_u64(&mut reader, 40, "page size")?;
-		let mut paged_reader = PagedReader::new(reader, page_size).read_err("Failed creating paged CRC reader")?;
-		let mut buffer = vec![0_u8; page_size as usize];
-		let mut page = 0;
-		while paged_reader
-			.read(&mut buffer)
-			.read_err(format!("Failed to validate CRC for page {page}"))?
-			!= 0
-		{
-			page += 1;
-		}
-		Ok(page_size)
-	}
-
-	/// Returns the raw unparsed binary XML data of the E57 file as bytes.
-	///
-	/// This standalone function does only the minimal parsing required
-	/// to get the XML section without any other checks or any other
-	/// validation than basic CRC ckecking for the XML section itself.
-	pub fn raw_xml(mut reader: T) -> Result<Vec<u8>> {
-		let page_size = Self::get_u64(&mut reader, 40, "page size")?;
-		let xml_offset = Self::get_u64(&mut reader, 24, "XML offset")?;
-		let xml_length = Self::get_u64(&mut reader, 32, "XML length")?;
-
-		// Create paged CRC reader
-		let mut paged_reader = PagedReader::new(reader, page_size).read_err("Failed creating paged CRC reader")?;
-
-		// Read XML data
-		Self::extract_xml(&mut paged_reader, xml_offset, xml_length as usize)
 	}
 
 	fn get_u64(reader: &mut T, offset: u64, name: &str) -> Result<u64> {
@@ -187,12 +135,11 @@ impl<T: Read + Seek> E57Reader<T> {
 	}
 }
 
-impl E57Reader<BufReader<File>> {
+impl E57Reader<File> {
 	/// Creates an E57 instance from a Path.
 	pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
 		let file = File::open(path).read_err("Unable to open file")?;
-		let reader = BufReader::new(file);
-		Self::new(reader)
+		Self::new(file)
 	}
 }
 

@@ -3,7 +3,7 @@ use crate::{RawValues, Record, RecordName, Result};
 use std::collections::HashMap;
 
 /// Simple structure for cartesian coordinates with an X, Y and Z value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CartesianCoordinate {
 	pub x: f64,
 	pub y: f64,
@@ -19,7 +19,7 @@ pub struct SphericalCoordinate {
 }
 
 /// Simple point colors with RGB values between 0 and 1.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Color {
 	pub red:   f32,
 	pub green: f32,
@@ -37,7 +37,7 @@ pub struct Return {
 #[derive(Clone, Debug, Default)]
 pub struct Point {
 	/// Cartesian XYZ coordinates.
-	pub cartesian:         Option<CartesianCoordinate>,
+	pub cartesian:         CartesianCoordinate,
 	/// Invalid states of the Cartesian coordinates.
 	/// 0 means valid, 1: means its a direction vector, 2 means fully invalid.
 	pub cartesian_invalid: Option<u8>,
@@ -49,12 +49,12 @@ pub struct Point {
 	pub spherical_invalid: Option<u8>,
 
 	/// RGB point colors.
-	pub color:         Option<Color>,
+	pub color:         Color,
 	/// A value of zero means the color is valid, 1 means invalid.
 	pub color_invalid: Option<u8>,
 
 	/// Floating point intensity value between 0 and 1.
-	pub intensity:         Option<f32>,
+	pub intensity:         f32,
 	/// A value of zero means the intensity is valid, 1 means invalid.
 	pub intensity_invalid: Option<u8>,
 
@@ -88,11 +88,11 @@ impl Point {
 			data.get(&RecordName::CartesianY),
 			data.get(&RecordName::CartesianZ),
 		) {
-			sp.cartesian = Some(CartesianCoordinate {
+			sp.cartesian = CartesianCoordinate {
 				x: xv.to_f64(xt)?,
 				y: yv.to_f64(yt)?,
 				z: zv.to_f64(zt)?,
-			});
+			};
 		}
 		if let Some((cit, civ)) = data.get(&RecordName::CartesianInvalidState) {
 			sp.cartesian_invalid = Some(civ.to_u8(cit)?);
@@ -116,11 +116,11 @@ impl Point {
 			data.get(&RecordName::ColorGreen),
 			data.get(&RecordName::ColorBlue),
 		) {
-			sp.color = Some(Color {
+			sp.color = Color {
 				red:   rv.to_unit_f32(rt)?,
 				green: gv.to_unit_f32(gt)?,
 				blue:  bv.to_unit_f32(bt)?,
-			});
+			};
 		}
 		if let Some((cit, civ)) = data.get(&RecordName::IsColorInvalid) {
 			sp.color_invalid = Some(civ.to_u8(cit)?);
@@ -129,7 +129,7 @@ impl Point {
 			sp.color_invalid = Some(civ.to_u8(cit)?);
 		}
 		if let Some((it, iv)) = data.get(&RecordName::Intensity) {
-			sp.intensity = Some(iv.to_unit_f32(it)?);
+			sp.intensity = iv.to_unit_f32(it)?;
 		}
 		if let Some((iit, iiv)) = data.get(&RecordName::IsIntensityInvalid) {
 			sp.intensity_invalid = Some(iiv.to_u8(iit)?);

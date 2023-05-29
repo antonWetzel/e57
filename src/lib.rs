@@ -11,7 +11,6 @@
 	clippy::large_types_passed_by_value
 )]
 
-pub mod bitpack;
 mod blob;
 mod bounds;
 mod bs_read;

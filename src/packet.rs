@@ -1,4 +1,5 @@
 use crate::error::{Converter, WRONG_OFFSET};
+use crate::paged_reader::PagedReader;
 use crate::{Error, Result};
 use std::io::{Read, Write};
 
@@ -9,13 +10,10 @@ pub enum PacketHeader {
 }
 
 impl PacketHeader {
-	pub fn read(reader: &mut dyn Read) -> Result<Self> {
+	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
 		// Read only first byte of header to indetify packet type
 		let mut buffer = [0_u8; 1];
-		reader
-			.read_exact(&mut buffer)
-			.read_err("Failed to read packet type ID")?;
-
+		reader.read_exact(&mut buffer).unwrap();
 		if buffer[0] == 0 {
 			Ok(PacketHeader::Index(IndexPacketHeader::read(reader)?))
 		} else if buffer[0] == 1 {
@@ -35,7 +33,7 @@ pub struct IndexPacketHeader {
 }
 
 impl IndexPacketHeader {
-	pub fn read(reader: &mut dyn Read) -> Result<Self> {
+	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
 		let mut buffer = [0_u8; 15];
 		reader
 			.read_exact(&mut buffer)
@@ -67,7 +65,7 @@ pub struct DataPacketHeader {
 impl DataPacketHeader {
 	pub const SIZE: usize = 6;
 
-	pub fn read(reader: &mut dyn Read) -> Result<Self> {
+	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
 		let mut buffer = [0_u8; 5];
 		reader
 			.read_exact(&mut buffer)
@@ -115,7 +113,7 @@ pub struct IgnoredPacketHeader {
 }
 
 impl IgnoredPacketHeader {
-	pub fn read(reader: &mut dyn Read) -> Result<Self> {
+	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
 		// Read Ignored Packet
 		let mut buffer = [0_u8; 3];
 		reader

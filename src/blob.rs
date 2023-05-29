@@ -36,19 +36,6 @@ pub fn blob_from_node(node: &Node) -> Result<Blob> {
 	Ok(Blob { offset, length })
 }
 
-pub fn extract_blob<T: Read + Seek>(reader: &mut PagedReader<T>, blob: &Blob, writer: &mut dyn Write) -> Result<u64> {
-	reader
-		.seek_physical(blob.offset)
-		.read_err("Failed to seek to start offset of blob")?;
-	let header = BlobSectionHeader::from_reader(reader)?;
-	if blob.length > header.section_length + 16 {
-		Error::invalid("Blob XML length and blob section header mismatch")?
-	}
-
-	let mut limited = reader.take(blob.length);
-	copy(&mut limited, writer).read_err("Failed to read binary blob data")
-}
-
 #[derive(Debug)]
 struct BlobSectionHeader {
 	_section_id:    u8,
@@ -56,7 +43,7 @@ struct BlobSectionHeader {
 }
 
 impl BlobSectionHeader {
-	pub fn from_array(buffer: &[u8; 16]) -> Result<Self> {
+	pub fn from_array(buffer: &[u8]) -> Result<Self> {
 		if buffer[0] != 0 {
 			Error::invalid("Section ID of the blob section header is not 0")?
 		}

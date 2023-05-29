@@ -1,4 +1,3 @@
-use crate::bitpack;
 use crate::bs_read::ByteStreamReadBuffer;
 use crate::cv_section::CompressedVectorSectionHeader;
 use crate::error::Converter;
@@ -7,9 +6,8 @@ use crate::paged_reader::PagedReader;
 use crate::Error;
 use crate::Point;
 use crate::PointCloud;
-use crate::RawValues;
 use crate::RecordDataType;
-use crate::RecordValue;
+use crate::RecordName;
 use crate::Result;
 use std::collections::VecDeque;
 use std::io::{Read, Seek};
@@ -20,7 +18,8 @@ pub struct PointCloudReader<'a, T: Read + Seek> {
 	reader:       &'a mut PagedReader<T>,
 	byte_streams: Vec<ByteStreamReadBuffer>,
 	read:         u64,
-	queues:       Vec<VecDeque<RecordValue>>,
+	queue:        VecDeque<Point>,
+	offsets:      Vec<usize>,
 }
 
 impl<'a, T: Read + Seek> PointCloudReader<'a, T> {
@@ -33,7 +32,8 @@ impl<'a, T: Read + Seek> PointCloudReader<'a, T> {
 			.seek_physical(section_header.data_offset)
 			.read_err("Cannot seek to packet header")?;
 		let byte_streams = vec![ByteStreamReadBuffer::new(); pc.prototype.len()];
-		let queues = vec![VecDeque::new(); pc.prototype.len()];
+		let offsets = vec![0usize; pc.prototype.len()];
+		let queue = VecDeque::new();
 		let pc = pc.clone();
 
 		Ok(PointCloudReader {
@@ -41,23 +41,34 @@ impl<'a, T: Read + Seek> PointCloudReader<'a, T> {
 			reader,
 			read: 0,
 			byte_streams,
-			queues,
+			queue,
+			offsets,
 		})
 	}
 
-	fn available_in_queue(&self) -> usize {
-		return self.queues.iter().map(|q| q.len()).min().unwrap_or(0);
-	}
-
-	fn pop_queue_point(&mut self) -> Result<RawValues> {
-		let mut point = RawValues::with_capacity(self.pc.prototype.len());
-		for i in 0..self.pc.prototype.len() {
-			let value = self.queues[i]
-				.pop_front()
-				.internal_err("Failed to pop value for next point")?;
-			point.push(value);
+	fn test<Extract, Insert, V>(
+		mut offset: usize,
+		byte_stream: &mut ByteStreamReadBuffer,
+		queue: &mut VecDeque<Point>,
+		extract: Extract,
+		insert: Insert,
+	) -> usize
+	where
+		Extract: Fn(&mut ByteStreamReadBuffer) -> Option<V>,
+		Insert: Fn(&mut Point, V),
+	{
+		loop {
+			let v = match extract(byte_stream) {
+				Some(v) => v,
+				None => break,
+			};
+			if offset >= queue.len() {
+				queue.push_back(Point::default());
+			}
+			insert(&mut queue[offset], v);
+			offset += 1;
 		}
-		Ok(point)
+		return offset;
 	}
 
 	fn advance(&mut self) -> Result<()> {
@@ -79,25 +90,145 @@ impl<'a, T: Read + Seek> PointCloudReader<'a, T> {
 					let len = u16::from_le_bytes(buf) as usize;
 					buffer_sizes.push(len);
 				}
-
-				for (i, bs) in buffer_sizes.iter().enumerate() {
-					let mut buffer = vec![0u8; *bs];
+				for (i, mut bs) in buffer_sizes.into_iter().enumerate() {
+					let mut buffer = vec![0u8; bs];
 					self.reader
 						.read_exact(&mut buffer)
 						.read_err("Failed to read data packet buffers")?;
-					self.byte_streams[i].append(buffer);
+					self.byte_streams[i].append(&buffer[..]);
 				}
 
 				for (i, r) in self.pc.prototype.iter().enumerate() {
-					let queue = &mut self.queues[i];
-					match r.data_type {
-						RecordDataType::Single { .. } => bitpack::unpack_singles(&mut self.byte_streams[i], queue)?,
-						RecordDataType::Double { .. } => bitpack::unpack_doubles(&mut self.byte_streams[i], queue)?,
-						RecordDataType::ScaledInteger { min, max, .. } => {
-							bitpack::unpack_scaled_ints(&mut self.byte_streams[i], min, max, queue)?
+					let offset = self.offsets[i];
+					let byte_stream = &mut self.byte_streams[i];
+					self.offsets[i] = match (r.name, r.data_type) {
+						(RecordName::CartesianX, RecordDataType::Double { min: None, max: None }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_f64(),
+							|p, v| p.cartesian.x = v,
+						),
+						(RecordName::CartesianX, RecordDataType::ScaledInteger { min, max, scale }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.cartesian.x = v as f64 * scale,
+						),
+						(RecordName::CartesianY, RecordDataType::Double { min: None, max: None }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_f64(),
+							|p, v| p.cartesian.y = v,
+						),
+						(RecordName::CartesianY, RecordDataType::ScaledInteger { min, max, scale }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.cartesian.y = v as f64 * scale,
+						),
+						(RecordName::CartesianZ, RecordDataType::Double { min: None, max: None }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_f64(),
+							|p, v| p.cartesian.z = v,
+						),
+						(RecordName::CartesianZ, RecordDataType::ScaledInteger { min, max, scale }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.cartesian.z = v as f64 * scale,
+						),
+						(RecordName::Intensity, RecordDataType::Single { min: None, max: None }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_f32(),
+							|p, v| p.intensity = v,
+						),
+						(RecordName::Intensity, RecordDataType::ScaledInteger { min, max, scale }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.intensity = (v as f64 * scale) as f32,
+						),
+						(RecordName::ColorRed, RecordDataType::Single { min: Some(min), max: Some(max) }) => {
+							Self::test(
+								offset,
+								byte_stream,
+								&mut self.queue,
+								|byte_stream| byte_stream.extract_f32(),
+								|p, v| p.color.red = (v - min) / (max - min),
+							)
 						},
-						RecordDataType::Integer { min, max } => {
-							bitpack::unpack_ints(&mut self.byte_streams[i], min, max, queue)?
+						(RecordName::ColorRed, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.color.red = (v - min) as f32 / (max - min) as f32,
+						),
+						(RecordName::ColorGreen, RecordDataType::Single { min: Some(min), max: Some(max) }) => {
+							Self::test(
+								offset,
+								byte_stream,
+								&mut self.queue,
+								|byte_stream| byte_stream.extract_f32(),
+								|p, v| p.color.green = (v - min) / (max - min),
+							)
+						},
+						(RecordName::ColorGreen, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.color.green = (v - min) as f32 / (max - min) as f32,
+						),
+						(RecordName::ColorBlue, RecordDataType::Single { min: Some(min), max: Some(max) }) => {
+							Self::test(
+								offset,
+								byte_stream,
+								&mut self.queue,
+								|byte_stream| byte_stream.extract_f32(),
+								|p, v| p.color.blue = (v - min) as f32 / (max - min) as f32,
+							)
+						},
+						(RecordName::ColorBlue, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.color.blue = (v - min) as f32 / (max - min) as f32,
+						),
+						(RecordName::RowIndex, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.row = Some(v),
+						),
+						(RecordName::ColumnIndex, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.row = Some(v),
+						),
+						(RecordName::CartesianInvalidState, RecordDataType::Integer { min, max }) => Self::test(
+							offset,
+							byte_stream,
+							&mut self.queue,
+							|byte_stream| byte_stream.extract_int(min, max),
+							|p, v| p.cartesian_invalid = Some(v as u8),
+						),
+						_ => {
+							panic!("todo: handle {:?} {:?}", r.name, r.data_type);
 						},
 					};
 				}
@@ -114,33 +245,31 @@ impl<'a, T: Read + Seek> PointCloudReader<'a, T> {
 
 impl<'a, T: Read + Seek> Iterator for PointCloudReader<'a, T> {
 	/// Each iterator item is a result for an extracted point.
-	type Item = Result<RawValues>;
+	type Item = Result<Point>;
 
 	/// Returns the next available point or None if the end was reached.
 	fn next(&mut self) -> Option<Self::Item> {
 		// Already read all points?
+
 		if self.read >= self.pc.records {
 			return None;
 		}
 
 		// Refill property queues if required
-		if self.available_in_queue() < 1 {
+		let needs_advance = self.offsets.iter().any(|offset| *offset == 0);
+		if needs_advance {
 			if let Err(err) = self.advance() {
 				return Some(Err(err));
 			}
 		}
-
-		// Try to read next point from properties queues
-		if self.available_in_queue() > 0 {
-			match self.pop_queue_point() {
-				Ok(point) => {
-					self.read += 1;
-					Some(Ok(point))
-				},
-				Err(err) => Some(Err(err)),
-			}
-		} else {
-			None
+		let p = match self.queue.pop_front() {
+			None => return None,
+			Some(p) => p,
+		};
+		self.read += 1;
+		for offset in self.offsets.iter_mut() {
+			*offset -= 1;
 		}
+		return Some(Ok(p));
 	}
 }

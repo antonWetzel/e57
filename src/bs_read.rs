@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 #[derive(Clone)]
 pub struct ByteStreamReadBuffer {
 	buffer: VecDeque<u8>,
-	offset: u64,
+	offset: u32,
 }
 
 impl ByteStreamReadBuffer {
@@ -11,8 +11,11 @@ impl ByteStreamReadBuffer {
 		Self { buffer: VecDeque::new(), offset: 0 }
 	}
 
-	pub fn append(&mut self, data: Vec<u8>) {
-		self.buffer.append(&mut VecDeque::from(data));
+	pub fn append(&mut self, data: &[u8]) {
+		self.buffer.reserve(data.len());
+		for val in data {
+			self.buffer.push_back(*val);
+		}
 	}
 
 	pub fn extract_f32(&mut self) -> Option<f32> {
@@ -37,10 +40,13 @@ impl ByteStreamReadBuffer {
 		return Some(f64::from_le_bytes(data));
 	}
 
-	pub fn extract_int(&mut self, bits: u64, min: i64, mask: u64) -> Option<i64> {
+	pub fn extract_int(&mut self, min: i64, max: i64) -> Option<i64> {
+		let range = max - min;
+		let bits = u64::BITS - range.leading_zeros();
 		if self.available() < bits {
 			return None;
 		}
+		let mask = (1u64 << bits) - 1;
 		let end_offset = ((self.offset + bits + 7) / 8) as usize;
 		let used_offset = ((self.offset + bits) / 8) as usize;
 		let mut tmp = [0u8; 8];
@@ -56,8 +62,8 @@ impl ByteStreamReadBuffer {
 		return Some(int_value);
 	}
 
-	pub fn available(&self) -> u64 {
-		(self.buffer.len() as u64 * 8) - self.offset
+	pub fn available(&self) -> u32 {
+		(self.buffer.len() as u32 * 8) - self.offset
 	}
 }
 

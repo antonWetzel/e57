@@ -66,8 +66,8 @@ impl<'a, T: Read + Write + Seek> PointCloudWriter<'a, T> {
 		let section_offset = writer.physical_position()?;
 
 		let mut section_header = CompressedVectorSectionHeader::default();
-		section_header.data_offset = section_offset + CompressedVectorSectionHeader::SIZE;
-		section_header.section_length = CompressedVectorSectionHeader::SIZE;
+		section_header.data_offset = section_offset + CompressedVectorSectionHeader::SIZE as u64;
+		section_header.section_length = CompressedVectorSectionHeader::SIZE as u64;
 		section_header.write(writer)?;
 
 		// Each data packet can contain up to 2^16 bytes and we need some reserved
