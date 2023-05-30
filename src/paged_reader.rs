@@ -55,6 +55,14 @@ impl<T: Read + Seek> PagedReader<T> {
 		self.offset += off_alignment;
 		return Ok(());
 	}
+
+	pub fn skip(&mut self, length: usize) {
+		let mut length = length as u64;
+		let skips = (self.offset + length) / (self.page_size - CHECKSUM_SIZE);
+		length += skips * CHECKSUM_SIZE;
+		self.offset = (self.offset + length) % self.page_size;
+		self.reader.seek(SeekFrom::Current(length as i64)).unwrap();
+	}
 }
 
 impl<T: Read + Seek> Read for PagedReader<T> {
