@@ -1,18 +1,21 @@
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::{
+	fs::File,
+	io::{Error, ErrorKind, Read, Result, Seek, SeekFrom},
+};
 
 const CHECKSUM_SIZE: u64 = 4;
 const ALIGNMENT_SIZE: u64 = 4;
 const MAX_PAGE_SIZE: u64 = 1024 * 1024;
 
-pub struct PagedReader<T: Read + Seek> {
-	page_size: u64,
-	reader:    T,
-	offset:    u64,
+pub struct PagedReader {
+	page_size:  u64,
+	pub reader: File,
+	offset:     u64,
 }
 
-impl<T: Read + Seek> PagedReader<T> {
+impl PagedReader {
 	/// Create and initialize a paged reader that abstracts the E57 CRC scheme
-	pub fn new(mut reader: T, page_size: u64) -> Result<Self> {
+	pub fn new(mut reader: File, page_size: u64) -> Result<Self> {
 		if page_size > MAX_PAGE_SIZE {
 			Err(Error::new(
 				ErrorKind::InvalidInput,
@@ -65,7 +68,7 @@ impl<T: Read + Seek> PagedReader<T> {
 	}
 }
 
-impl<T: Read + Seek> Read for PagedReader<T> {
+impl Read for PagedReader {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
 		if self.offset == self.page_size - CHECKSUM_SIZE {
 			self.offset = 0;

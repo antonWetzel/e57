@@ -26,4 +26,5 @@ members = [
 ]
 
 [dependencies]
+memmap2 = "0.6.2"
 roxmltree = "0.18"

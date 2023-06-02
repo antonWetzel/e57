@@ -53,7 +53,7 @@ impl BlobSectionHeader {
 		})
 	}
 
-	fn from_reader<T: Read + Seek>(reader: &mut PagedReader<T>) -> Result<BlobSectionHeader> {
+	fn from_reader<T: Read + Seek>(reader: &mut PagedReader) -> Result<BlobSectionHeader> {
 		let mut buffer = [0_u8; 16];
 		reader
 			.read_exact(&mut buffer)

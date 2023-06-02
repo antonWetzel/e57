@@ -2,7 +2,7 @@
 //!
 //! Some example code can be found [here](https://github.com/cry-inc/e57/tree/master/tools) in the GitHub repository.
 
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 #![deny(
 	clippy::unwrap_used,
 	clippy::expect_used,

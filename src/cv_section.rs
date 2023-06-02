@@ -17,9 +17,7 @@ pub struct CompressedVectorSectionHeader {
 impl CompressedVectorSectionHeader {
 	pub const SIZE: usize = 32;
 
-	pub fn read<T: std::io::Read + std::io::Seek>(
-		reader: &mut PagedReader<T>,
-	) -> Result<CompressedVectorSectionHeader> {
+	pub fn read(reader: &mut PagedReader) -> Result<CompressedVectorSectionHeader> {
 		let mut buffer = [0_u8; Self::SIZE as usize];
 		reader
 			.read_exact(&mut buffer)

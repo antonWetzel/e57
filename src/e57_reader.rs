@@ -24,17 +24,17 @@ use std::str::from_utf8;
 const MAX_XML_SIZE: usize = 1024 * 1024 * 10;
 
 /// Main interface for reading E57 files.
-pub struct E57Reader<T: Read + Seek> {
-	reader:      PagedReader<T>,
+pub struct E57Reader {
+	reader:      PagedReader,
 	header:      Header,
 	root:        Root,
 	pointclouds: Vec<PointCloud>,
 	images:      Vec<Image>,
 }
 
-impl<T: Read + Seek> E57Reader<T> {
+impl E57Reader {
 	/// Creates a new E57 instance for from a reader.
-	pub fn new(mut reader: T) -> Result<Self> {
+	pub fn new(mut reader: File) -> Result<Self> {
 		// Read, parse and validate E57 header
 		let header = Header::read(&mut reader)?;
 
@@ -82,7 +82,7 @@ impl<T: Read + Seek> E57Reader<T> {
 	}
 
 	/// Returns an iterator for the requested point cloud.
-	pub fn pointcloud(&mut self, pc: &PointCloud) -> Result<PointCloudReader<T>> {
+	pub fn pointcloud(&mut self, pc: &PointCloud) -> Result<PointCloudReader> {
 		PointCloudReader::new(pc, &mut self.reader)
 	}
 
@@ -107,7 +107,7 @@ impl<T: Read + Seek> E57Reader<T> {
 		self.root.coordinate_metadata.as_deref()
 	}
 
-	fn get_u64(reader: &mut T, offset: u64, name: &str) -> Result<u64> {
+	fn get_u64(reader: &mut File, offset: u64, name: &str) -> Result<u64> {
 		reader
 			.seek(std::io::SeekFrom::Start(offset))
 			.read_err(format!("Cannot seek to {name} offset"))?;
@@ -118,7 +118,7 @@ impl<T: Read + Seek> E57Reader<T> {
 		Ok(u64::from_le_bytes(buf))
 	}
 
-	fn extract_xml(reader: &mut PagedReader<T>, offset: u64, length: usize) -> Result<Vec<u8>> {
+	fn extract_xml(reader: &mut PagedReader, offset: u64, length: usize) -> Result<Vec<u8>> {
 		if length > MAX_XML_SIZE {
 			Error::not_implemented(format!(
 				"XML sections larger than {MAX_XML_SIZE} bytes are not supported"
@@ -135,7 +135,7 @@ impl<T: Read + Seek> E57Reader<T> {
 	}
 }
 
-impl E57Reader<File> {
+impl E57Reader {
 	/// Creates an E57 instance from a Path.
 	pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
 		let file = File::open(path).read_err("Unable to open file")?;

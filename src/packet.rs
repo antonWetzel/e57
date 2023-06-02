@@ -10,7 +10,7 @@ pub enum PacketHeader {
 }
 
 impl PacketHeader {
-	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
+	pub fn read(reader: &mut PagedReader) -> Result<Self> {
 		// Read only first byte of header to indetify packet type
 		let mut buffer = [0_u8; 1];
 		reader.read_exact(&mut buffer).unwrap();
@@ -33,7 +33,7 @@ pub struct IndexPacketHeader {
 }
 
 impl IndexPacketHeader {
-	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
+	pub fn read(reader: &mut PagedReader) -> Result<Self> {
 		let mut buffer = [0_u8; 15];
 		reader
 			.read_exact(&mut buffer)
@@ -65,7 +65,7 @@ pub struct DataPacketHeader {
 impl DataPacketHeader {
 	pub const SIZE: usize = 6;
 
-	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
+	pub fn read(reader: &mut PagedReader) -> Result<Self> {
 		let mut buffer = [0_u8; 5];
 		reader
 			.read_exact(&mut buffer)
@@ -113,7 +113,7 @@ pub struct IgnoredPacketHeader {
 }
 
 impl IgnoredPacketHeader {
-	pub fn read<T: std::io::Read + std::io::Seek>(reader: &mut PagedReader<T>) -> Result<Self> {
+	pub fn read(reader: &mut PagedReader) -> Result<Self> {
 		// Read Ignored Packet
 		let mut buffer = [0_u8; 3];
 		reader
