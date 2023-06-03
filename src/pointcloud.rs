@@ -1,9 +1,5 @@
-use crate::error::Converter;
-use crate::xml::{optional_date_time, optional_double, optional_string, optional_transform, required_string};
-use crate::{
-	CartesianBounds, ColorLimits, DateTime, IndexBounds, IntensityLimits, Record, RecordDataType, RecordName, Result,
-	SphericalBounds, Transform,
-};
+use crate::xml::{optional_double, optional_string, optional_transform, required_string};
+use crate::{CartesianBounds, Error, IndexBounds, Record, RecordDataType, RecordName, SphericalBounds, Transform};
 use roxmltree::{Document, Node};
 
 /// Descriptor with metadata for a single point cloud.
@@ -32,16 +28,8 @@ pub struct PointCloud {
 	pub spherical_bounds:     Option<SphericalBounds>,
 	/// Optional index bounds (row, column, return values) for the point cloud.
 	pub index_bounds:         Option<IndexBounds>,
-	/// Optional intensity limits for the point cloud.
-	pub intensity_limits:     Option<IntensityLimits>,
-	/// Optional color limits for the point cloud.
-	pub color_limits:         Option<ColorLimits>,
 	/// Optional transformation to convert data from the local point cloud coordinates to the file-level coordinate system.
 	pub transform:            Option<Transform>,
-	/// Optional start date and time when the point cloud was captured with a scanning device.
-	pub acquisition_start:    Option<DateTime>,
-	/// Optional end date and time when the point cloud was captured with a scanning device.
-	pub acquisition_end:      Option<DateTime>,
 	/// Optional name of the manufacturer for the sensor used to capture the point cloud.
 	pub sensor_vendor:        Option<String>,
 	/// Optional model name of the sensor used for capturing.
@@ -62,11 +50,13 @@ pub struct PointCloud {
 	pub atmospheric_pressure: Option<f64>,
 }
 
-pub fn pointclouds_from_document(document: &Document) -> Result<Vec<PointCloud>> {
+pub fn pointclouds_from_document(document: &Document) -> Result<Vec<PointCloud>, Error> {
 	let data3d_node = document
 		.descendants()
 		.find(|n| n.has_tag_name("data3D"))
-		.invalid_err("Cannot find 'data3D' tag in XML document")?;
+		.ok_or(Error::Invalid(
+			"Cannot find 'data3D' tag in XML document".into(),
+		))?;
 
 	let mut pointclouds = Vec::new();
 	for n in data3d_node.children() {
@@ -78,7 +68,7 @@ pub fn pointclouds_from_document(document: &Document) -> Result<Vec<PointCloud>>
 	Ok(pointclouds)
 }
 
-fn extract_pointcloud(node: &Node) -> Result<PointCloud> {
+fn extract_pointcloud(node: &Node) -> Result<PointCloud, Error> {
 	let guid = required_string(node, "guid")?;
 	let name = optional_string(node, "name")?;
 	let description = optional_string(node, "description")?;
@@ -91,33 +81,35 @@ fn extract_pointcloud(node: &Node) -> Result<PointCloud> {
 	let temperature = optional_double(node, "temperature")?;
 	let humidity = optional_double(node, "relativeHumidity")?;
 	let atmospheric_pressure = optional_double(node, "atmosphericPressure")?;
-	let acquisition_start = optional_date_time(node, "acquisitionStart")?;
-	let acquisition_end = optional_date_time(node, "acquisitionEnd")?;
 	let transform = optional_transform(node, "pose")?;
 	let cartesian_bounds = node.children().find(|n| n.has_tag_name("cartesianBounds"));
 	let spherical_bounds = node.children().find(|n| n.has_tag_name("sphericalBounds"));
 	let index_bounds = node.children().find(|n| n.has_tag_name("indexBounds"));
-	let intensity_limits = node.children().find(|n| n.has_tag_name("colorLimits"));
-	let color_limits = node.children().find(|n| n.has_tag_name("colorLimits"));
 
 	let points_tag = node
 		.children()
 		.find(|n| n.has_tag_name("points") && n.attribute("type") == Some("CompressedVector"))
-		.invalid_err("Cannot find 'points' tag inside 'data3D' child")?;
+		.ok_or(Error::Invalid(
+			"Cannot find 'points' tag inside 'data3D' child".into(),
+		))?;
 	let file_offset = points_tag
 		.attribute("fileOffset")
-		.invalid_err("Cannot find 'fileOffset' attribute in 'points' tag")?
-		.parse::<u64>()
-		.invalid_err("Cannot parse 'fileOffset' attribute value as u64")?;
+		.ok_or(Error::Invalid(
+			"Cannot find 'fileOffset' attribute in 'points' tag".into(),
+		))?
+		.parse::<u64>()?;
 	let records = points_tag
 		.attribute("recordCount")
-		.invalid_err("Cannot find 'recordCount' attribute in 'points' tag")?
-		.parse::<u64>()
-		.invalid_err("Cannot parse 'recordCount' attribute value as u64")?;
+		.ok_or(Error::Invalid(
+			"Cannot find 'recordCount' attribute in 'points' tag".into(),
+		))?
+		.parse::<u64>()?;
 	let prototype_tag = points_tag
 		.children()
 		.find(|n| n.has_tag_name("prototype") && n.attribute("type") == Some("Structure"))
-		.invalid_err("Cannot find 'prototype' child in 'points' tag")?;
+		.ok_or(Error::Invalid(
+			"Cannot find 'prototype' child in 'points' tag".into(),
+		))?;
 	let mut prototype = Vec::new();
 	for n in prototype_tag.children() {
 		if n.is_element() {
@@ -149,20 +141,8 @@ fn extract_pointcloud(node: &Node) -> Result<PointCloud> {
 		} else {
 			None
 		},
-		intensity_limits: if let Some(node) = intensity_limits {
-			Some(IntensityLimits::from_node(&node)?)
-		} else {
-			None
-		},
-		color_limits: if let Some(node) = color_limits {
-			Some(ColorLimits::from_node(&node)?)
-		} else {
-			None
-		},
 		transform,
 		description,
-		acquisition_start,
-		acquisition_end,
 		sensor_vendor,
 		sensor_model,
 		sensor_serial,

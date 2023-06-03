@@ -1,6 +1,6 @@
 use crate::xml::optional_double;
 use crate::xml::optional_integer;
-use crate::Result;
+use crate::Error;
 use roxmltree::Node;
 
 /// Optional minimum and maximum values for Cartesian X, Y and Z coordinates.
@@ -15,7 +15,7 @@ pub struct CartesianBounds {
 }
 
 impl CartesianBounds {
-	pub(crate) fn from_node(node: &Node) -> Result<Self> {
+	pub(crate) fn from_node(node: &Node) -> Result<Self, Error> {
 		let x_min = optional_double(node, "xMinimum")?;
 		let x_max = optional_double(node, "xMaximum")?;
 		let y_min = optional_double(node, "yMinimum")?;
@@ -38,7 +38,7 @@ pub struct SphericalBounds {
 }
 
 impl SphericalBounds {
-	pub(crate) fn from_node(node: &Node) -> Result<Self> {
+	pub(crate) fn from_node(node: &Node) -> Result<Self, Error> {
 		let range_min = optional_double(node, "rangeMinimum")?;
 		let range_max = optional_double(node, "rangeMaximum")?;
 		let elevation_min = optional_double(node, "elevationMinimum")?;
@@ -68,7 +68,7 @@ pub struct IndexBounds {
 }
 
 impl IndexBounds {
-	pub(crate) fn from_node(node: &Node) -> Result<Self> {
+	pub(crate) fn from_node(node: &Node) -> Result<Self, Error> {
 		let row_min = optional_integer(node, "rowMinimum")?;
 		let row_max = optional_integer(node, "rowMaximum")?;
 		let column_min = optional_integer(node, "columnMinimum")?;

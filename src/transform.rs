@@ -1,6 +1,5 @@
-use crate::error::Converter;
 use crate::xml::required_double;
-use crate::Result;
+use crate::Error;
 use roxmltree::Node;
 
 /// Describes the rotation of a point cloud.
@@ -36,22 +35,26 @@ pub struct Transform {
 	pub translation: Translation,
 }
 
-pub fn transform_from_node(node: &Node) -> Result<Transform> {
+pub fn transform_from_node(node: &Node) -> Result<Transform, Error> {
 	let translation = node
 		.children()
 		.find(|n| n.has_tag_name("translation"))
-		.invalid_err("Cannot find translation tag of transform")?;
+		.ok_or(Error::Invalid(
+			"Cannot find translation tag of transform".into(),
+		))?;
 	let quaternion = node
 		.children()
 		.find(|n| n.has_tag_name("rotation"))
-		.invalid_err("Cannot find quaternion tag of transform")?;
+		.ok_or(Error::Invalid(
+			"Cannot find quaternion tag of transform".into(),
+		))?;
 	Ok(Transform {
 		rotation:    quaternion_from_node(&quaternion)?,
 		translation: translation_from_node(&translation)?,
 	})
 }
 
-pub fn quaternion_from_node(node: &Node) -> Result<Quaternion> {
+pub fn quaternion_from_node(node: &Node) -> Result<Quaternion, Error> {
 	let w = required_double(node, "w")?;
 	let x = required_double(node, "x")?;
 	let y = required_double(node, "y")?;
@@ -59,7 +62,7 @@ pub fn quaternion_from_node(node: &Node) -> Result<Quaternion> {
 	Ok(Quaternion { w, x, y, z })
 }
 
-pub fn translation_from_node(node: &Node) -> Result<Translation> {
+pub fn translation_from_node(node: &Node) -> Result<Translation, Error> {
 	let x = required_double(node, "x")?;
 	let y = required_double(node, "y")?;
 	let z = required_double(node, "z")?;

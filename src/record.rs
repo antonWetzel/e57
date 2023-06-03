@@ -1,5 +1,4 @@
-use crate::error::Converter;
-use crate::{Error, Result};
+use crate::Error;
 use roxmltree::Node;
 use std::error::Error as StdError;
 use std::fmt::{Debug, Display};
@@ -93,7 +92,7 @@ pub enum RecordValue {
 }
 
 impl RecordName {
-	pub(crate) fn from_tag_name(value: &str) -> Result<Self> {
+	pub(crate) fn from_tag_name(value: &str) -> Result<Self, Error> {
 		Ok(match value {
 			"cartesianX" => RecordName::CartesianX,
 			"cartesianY" => RecordName::CartesianY,
@@ -115,17 +114,17 @@ impl RecordName {
 			"returnIndex" => RecordName::ReturnIndex,
 			"timeStamp" => RecordName::TimeStamp,
 			"isTimeStampInvalid" => RecordName::IsTimeStampInvalid,
-			name => Error::not_implemented(format!("Found unknown record name: '{name}'"))?,
+			name => return Error::Unimplemented(format!("Found unknown record name: '{name}'")).throw(),
 		})
 	}
 }
 
 impl RecordDataType {
-	pub(crate) fn from_node(node: &Node) -> Result<Self> {
+	pub(crate) fn from_node(node: &Node) -> Result<Self, Error> {
 		let tag_name = node.tag_name().name();
-		let type_name = node
-			.attribute("type")
-			.invalid_err(format!("Missing type attribute for XML tag '{tag_name}'"))?;
+		let type_name = node.attribute("type").ok_or(Error::Invalid(format!(
+			"Missing type attribute for XML tag '{tag_name}'"
+		)))?;
 		Ok(match type_name {
 			"Float" => {
 				let precision = node.attribute("precision").unwrap_or("double");
@@ -138,19 +137,21 @@ impl RecordDataType {
 					let max = optional_attribute(node, "maximum", tag_name, type_name)?;
 					RecordDataType::Single { min, max }
 				} else {
-					Error::invalid(format!(
+					return Error::Invalid(format!(
 						"Float 'precision' attribute value '{precision}' for 'Float' type is unknown"
-					))?
+					))
+					.throw();
 				}
 			},
 			"Integer" => {
 				let min = required_attribute(node, "minimum", tag_name, type_name)?;
 				let max = required_attribute(node, "maximum", tag_name, type_name)?;
 				if max <= min {
-					Error::invalid(format!(
+					return Error::Invalid(format!(
 						"Maximum value '{max}' and minimum value '{min}' of type '{type_name}' in XML tag \
 						 '{tag_name}' are inconsistent"
-					))?
+					))
+					.throw();
 				}
 				RecordDataType::Integer { min, max }
 			},
@@ -158,89 +159,93 @@ impl RecordDataType {
 				let min = required_attribute(node, "minimum", tag_name, type_name)?;
 				let max = required_attribute(node, "maximum", tag_name, type_name)?;
 				if max <= min {
-					Error::invalid(format!(
+					return Error::Invalid(format!(
 						"Maximum value '{max}' and minimum value '{min}' of type '{type_name}' in XML tag \
 						 '{tag_name}' are inconsistent"
-					))?
+					))
+					.throw();
 				}
 				let scale = required_attribute(node, "scale", tag_name, type_name)?;
 				RecordDataType::ScaledInteger { min, max, scale }
 			},
-			_ => Error::not_implemented(format!(
-				"Unsupported type '{type_name}' in XML tag '{tag_name}' detected"
-			))?,
+			_ => {
+				return Error::Unimplemented(format!(
+					"Unsupported type '{type_name}' in XML tag '{tag_name}' detected"
+				))
+				.throw()
+			},
 		})
 	}
 }
 
 impl RecordValue {
-	pub fn to_f64(&self, dt: &RecordDataType) -> Result<f64> {
-		match self {
-			RecordValue::Single(s) => Ok(*s as f64),
-			RecordValue::Double(d) => Ok(*d),
-			RecordValue::ScaledInteger(i) => {
-				if let RecordDataType::ScaledInteger { scale, .. } = dt {
-					Ok(*i as f64 * *scale)
-				} else {
-					Error::internal("Tried to convert scaled integer value with wrong data type")
-				}
-			},
-			RecordValue::Integer(i) => Ok(*i as f64),
-		}
-	}
+	// pub fn to_f64(&self, dt: &RecordDataType) -> Result<f64, Error> {
+	// 	match self {
+	// 		RecordValue::Single(s) => Ok(*s as f64),
+	// 		RecordValue::Double(d) => Ok(*d),
+	// 		RecordValue::ScaledInteger(i) => {
+	// 			if let RecordDataType::ScaledInteger { scale, .. } = dt {
+	// 				Ok(*i as f64 * *scale)
+	// 			} else {
+	// 				Error::internal("Tried to convert scaled integer value with wrong data type")
+	// 			}
+	// 		},
+	// 		RecordValue::Integer(i) => Ok(*i as f64),
+	// 	}
+	// }
 
-	pub fn to_unit_f32(&self, dt: &RecordDataType) -> Result<f32> {
-		match self {
-			RecordValue::Single(s) => {
-				if let RecordDataType::Single { min: Some(min), max: Some(max) } = dt {
-					Ok((s - min) / (max - min))
-				} else {
-					Error::internal("Tried to convert single value with wrong data type or without min/max")
-				}
-			},
-			RecordValue::Double(d) => {
-				if let RecordDataType::Double { min: Some(min), max: Some(max) } = dt {
-					Ok(((d - min) / (max - min)) as f32)
-				} else {
-					Error::internal("Tried to convert double value with wrong data type or without min/max")
-				}
-			},
-			RecordValue::ScaledInteger(si) => {
-				if let RecordDataType::ScaledInteger { min, max, .. } = dt {
-					Ok((si - min) as f32 / (max - min) as f32)
-				} else {
-					Error::internal("Tried to convert scaled integer value with wrong data type")
-				}
-			},
-			RecordValue::Integer(i) => {
-				if let RecordDataType::Integer { min, max } = dt {
-					Ok((i - min) as f32 / (max - min) as f32)
-				} else {
-					Error::internal("Tried to convert integer value with wrong data type")
-				}
-			},
-		}
-	}
+	// pub fn to_unit_f32(&self, dt: &RecordDataType) -> Result<f32, Error> {
+	// 	match self {
+	// 		RecordValue::Single(s) => {
+	// 			if let RecordDataType::Single { min: Some(min), max: Some(max) } = dt {
+	// 				Ok((s - min) / (max - min))
+	// 			} else {
+	// 				Error::internal("Tried to convert single value with wrong data type or without min/max")
+	// 			}
+	// 		},
+	// 		RecordValue::Double(d) => {
+	// 			if let RecordDataType::Double { min: Some(min), max: Some(max) } = dt {
+	// 				Ok(((d - min) / (max - min)) as f32)
+	// 			} else {
+	// 				Error::internal("Tried to convert double value with wrong data type or without min/max")
+	// 			}
+	// 		},
+	// 		RecordValue::ScaledInteger(si) => {
+	// 			if let RecordDataType::ScaledInteger { min, max, .. } = dt {
+	// 				Ok((si - min) as f32 / (max - min) as f32)
+	// 			} else {
+	// 				Error::internal("Tried to convert scaled integer value with wrong data type")
+	// 			}
+	// 		},
+	// 		RecordValue::Integer(i) => {
+	// 			if let RecordDataType::Integer { min, max } = dt {
+	// 				Ok((i - min) as f32 / (max - min) as f32)
+	// 			} else {
+	// 				Error::internal("Tried to convert integer value with wrong data type")
+	// 			}
+	// 		},
+	// 	}
+	// }
 
-	pub fn to_u8(&self, dt: &RecordDataType) -> Result<u8> {
-		if let (RecordValue::Integer(i), RecordDataType::Integer { min, max }) = (self, dt) {
-			if *min >= 0 && *max <= 255 {
-				Ok(*i as u8)
-			} else {
-				Error::internal("Integer range is too big for u8")
-			}
-		} else {
-			Error::internal("Tried to convert value to u8 with unsupported value or data type")
-		}
-	}
+	// pub fn to_u8(&self, dt: &RecordDataType) -> Result<u8, Error> {
+	// 	if let (RecordValue::Integer(i), RecordDataType::Integer { min, max }) = (self, dt) {
+	// 		if *min >= 0 && *max <= 255 {
+	// 			Ok(*i as u8)
+	// 		} else {
+	// 			Error::internal("Integer range is too big for u8")
+	// 		}
+	// 	} else {
+	// 		Error::internal("Tried to convert value to u8 with unsupported value or data type")
+	// 	}
+	// }
 
-	pub fn to_i64(&self, dt: &RecordDataType) -> Result<i64> {
-		if let (RecordValue::Integer(i), RecordDataType::Integer { .. }) = (self, dt) {
-			Ok(*i)
-		} else {
-			Error::internal("Tried to convert value to i64 with unsupported data type")
-		}
-	}
+	// pub fn to_i64(&self, dt: &RecordDataType) -> Result<i64, Error> {
+	// 	if let (RecordValue::Integer(i), RecordDataType::Integer { .. }) = (self, dt) {
+	// 		Ok(*i)
+	// 	} else {
+	// 		Error::internal("Tried to convert value to i64 with unsupported data type")
+	// 	}
+	// }
 }
 
 impl Display for RecordValue {
@@ -254,30 +259,38 @@ impl Display for RecordValue {
 	}
 }
 
-fn optional_attribute<T>(node: &Node, attribute: &str, tag_name: &str, type_name: &str) -> Result<Option<T>>
+fn optional_attribute<T>(node: &Node, attribute: &str, tag_name: &str, type_name: &str) -> Result<Option<T>, Error>
 where
 	T: FromStr,
 	T::Err: StdError + Send + Sync + 'static,
 {
-	Ok(if let Some(attr) = node.attribute(attribute) {
+	if let Some(attr) = node.attribute(attribute) {
 		let parsed = attr.parse::<T>();
-		Some(parsed.invalid_err(format!(
-			"Failed to parse attribute '{attribute}' for type '{type_name}' in XML tag '{tag_name}'"
-		))?)
+		let v = match parsed {
+			Err(_) => {
+				return Error::Invalid(format!(
+					"Failed to parse attribute '{}' for type '{}' in XML tag '{}'",
+					attribute, type_name, tag_name
+				))
+				.throw()
+			},
+			Ok(v) => v,
+		};
+		Ok(Some(v))
 	} else {
-		None
-	})
+		Ok(None)
+	}
 }
 
-fn required_attribute<T>(node: &Node, attribute: &str, tag_name: &str, type_name: &str) -> Result<T>
+fn required_attribute<T>(node: &Node, attribute: &str, tag_name: &str, type_name: &str) -> Result<T, Error>
 where
 	T: FromStr,
 	T::Err: StdError + Send + Sync + 'static,
 {
-	let value = optional_attribute(node, attribute, tag_name, type_name)?;
-	value.invalid_err(format!(
-		"Cannot find '{attribute}' for type '{type_name}' in XML tag '{tag_name}'"
-	))
+	optional_attribute(node, attribute, tag_name, type_name)?.ok_or(Error::Invalid(format!(
+		"Cannot find '{}' for type '{}' in XML tag '{}'",
+		attribute, type_name, tag_name
+	)))
 }
 
 impl RecordDataType {

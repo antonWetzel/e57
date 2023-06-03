@@ -16,15 +16,6 @@ include = [
     "/README.md",
 ]
 
-[workspace]
-members = [
-    "tools/extract-xml",
-    "tools/e57-to-xyz",
-    "tools/xyz-to-e57",
-    "tools/crc-validator",
-    "tools/extract-images",
-]
-
 [dependencies]
 memmap2 = "0.6.2"
 roxmltree = "0.18"
