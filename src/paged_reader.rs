@@ -4,7 +4,7 @@ use std::{
 };
 
 const CHECKSUM_SIZE: u64 = 4;
-const ALIGNMENT_SIZE: u64 = 4;
+
 const MAX_PAGE_SIZE: u64 = 1024 * 1024;
 
 pub struct PagedReader {
@@ -48,23 +48,6 @@ impl PagedReader {
 		self.reader.seek(SeekFrom::Start(offset))?;
 		self.offset = offset % self.page_size;
 		return Ok(());
-	}
-
-	pub fn align(&mut self) -> Result<()> {
-		let off_alignment = self.offset.overflowing_neg().0 % ALIGNMENT_SIZE;
-		self.reader
-			.seek(SeekFrom::Current(off_alignment as i64))
-			.unwrap();
-		self.offset += off_alignment;
-		return Ok(());
-	}
-
-	pub fn skip(&mut self, length: usize) {
-		let mut length = length as u64;
-		let skips = (self.offset + length) / (self.page_size - CHECKSUM_SIZE);
-		length += skips * CHECKSUM_SIZE;
-		self.offset = (self.offset + length) % self.page_size;
-		self.reader.seek(SeekFrom::Current(length as i64)).unwrap();
 	}
 }
 

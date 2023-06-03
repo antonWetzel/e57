@@ -1,6 +1,4 @@
 use crate::crc32::Crc32;
-use crate::error::Converter;
-use crate::{Error, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 const PAGE_SIZE: u64 = 1024;
@@ -12,99 +10,6 @@ pub struct PagedWriter<T: Write + Read + Seek> {
 	offset:      usize,
 	crc:         Crc32,
 	page_buffer: Vec<u8>,
-}
-
-impl<T: Write + Read + Seek> PagedWriter<T> {
-	/// Create and initialize a paged writer that abstracts the E57 CRC scheme
-	pub fn new(mut writer: T) -> Result<Self> {
-		let end = writer
-			.seek(SeekFrom::End(0))
-			.read_err("Unable to seek length of writer")?;
-		if end != 0 {
-			Err(Error::Write {
-				desc:   String::from("Supplied writer is not empty"),
-				source: None,
-			})?
-		}
-		let crc = Crc32::new();
-		let page_buffer = vec![0_u8; (PAGE_SIZE - CRC_SIZE) as usize];
-		Ok(Self { writer, offset: 0, crc, page_buffer })
-	}
-
-	/// Get the current physical offset in the file.
-	pub fn physical_position(&mut self) -> Result<u64> {
-		let pos = self
-			.writer
-			.stream_position()
-			.read_err("Failed to get position from writer")?;
-		Ok(pos + self.offset as u64)
-	}
-
-	/// Seek to a specific physical offset in the file.
-	pub fn physical_seek(&mut self, pos: u64) -> Result<()> {
-		// Make sure we wrote the current (partial) page before seeking
-		self.flush().write_err("Failed to flush before seeking")?;
-
-		let end = self
-			.writer
-			.seek(SeekFrom::End(0))
-			.write_err("Failed to seek to file end")?;
-		let page = pos / PAGE_SIZE;
-		self.offset = (pos % PAGE_SIZE) as usize;
-		self.page_buffer.fill(0_u8);
-
-		if pos > end {
-			Err(Error::Write {
-				desc:   String::from("Cannot seek after end of file"),
-				source: None,
-			})?
-		}
-
-		let page_phys_offset = page * PAGE_SIZE;
-		self.writer
-			.seek(SeekFrom::Start(page_phys_offset))
-			.write_err("Failed to seek to specified position")?;
-
-		// If available, read existing page data
-		if end >= page_phys_offset + PAGE_SIZE {
-			self.writer
-				.read_exact(&mut self.page_buffer)
-				.write_err("Failed to read existing page data")?;
-			self.writer
-				.seek(SeekFrom::Start(page_phys_offset))
-				.write_err("Failed to seek back to page start after reading existing data")?;
-		}
-		Ok(())
-	}
-
-	// Get the current physical size of the file.
-	pub fn physical_size(&mut self) -> Result<u64> {
-		self.flush().write_err("Cannot flush writer")?;
-		let pos = self
-			.writer
-			.stream_position()
-			.write_err("Cannot get current position")?;
-		let size = self
-			.writer
-			.seek(SeekFrom::End(0))
-			.write_err("Cannot seek to file end")?;
-		self.writer
-			.seek(SeekFrom::Start(pos))
-			.write_err("Cannot seek to previois position")?;
-		Ok(size)
-	}
-
-	/// Write some zeros to next 4-byte-aligned offset, if needed.
-	pub fn align(&mut self) -> Result<()> {
-		let mod_offset = self.offset % 4;
-		if mod_offset != 0 {
-			let skip = 4 - mod_offset;
-			let zeros = vec![0_u8; skip];
-			self.write_all(&zeros)
-				.write_err("Failed to write zero bytes for alignment")?;
-		}
-		Ok(())
-	}
 }
 
 impl<T: Write + Read + Seek> Write for PagedWriter<T> {

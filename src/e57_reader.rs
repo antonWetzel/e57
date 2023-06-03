@@ -1,25 +1,18 @@
 use crate::error::Converter;
-use crate::images::images_from_document;
 use crate::paged_reader::PagedReader;
 use crate::pc_reader::PointCloudReader;
 use crate::pointcloud::pointclouds_from_document;
 use crate::root::root_from_document;
 use crate::root::Root;
-use crate::Blob;
 use crate::DateTime;
 use crate::Error;
 use crate::Header;
-use crate::Image;
 use crate::PointCloud;
 use crate::Result;
 use roxmltree::Document;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::Read;
-use std::io::Seek;
-use std::io::Write;
 use std::path::Path;
-use std::str::from_utf8;
 
 const MAX_XML_SIZE: usize = 1024 * 1024 * 10;
 
@@ -29,7 +22,6 @@ pub struct E57Reader {
 	header:      Header,
 	root:        Root,
 	pointclouds: Vec<PointCloud>,
-	images:      Vec<Image>,
 }
 
 impl E57Reader {
@@ -51,14 +43,7 @@ impl E57Reader {
 		let document = Document::parse(&xml).invalid_err("Failed to parse XML data")?;
 		let root = root_from_document(&document)?;
 		let pointclouds = pointclouds_from_document(&document)?;
-		let images = images_from_document(&document)?;
-		Ok(Self {
-			reader,
-			header,
-			root,
-			pointclouds,
-			images,
-		})
+		Ok(Self { reader, header, root, pointclouds })
 	}
 
 	/// Returns the contents of E57 binary file header structure.
@@ -86,11 +71,6 @@ impl E57Reader {
 		PointCloudReader::new(pc, &mut self.reader)
 	}
 
-	/// Returns a list of all images in the file.
-	pub fn images(&self) -> Vec<Image> {
-		self.images.clone()
-	}
-
 	/// Returns the optional creation date and time of the file.
 	pub fn creation(&self) -> Option<DateTime> {
 		self.root.creation.clone()
@@ -105,17 +85,6 @@ impl E57Reader {
 	/// See also: <https://www.ogc.org/standard/wkt-crs/>
 	pub fn coordinate_metadata(&self) -> Option<&str> {
 		self.root.coordinate_metadata.as_deref()
-	}
-
-	fn get_u64(reader: &mut File, offset: u64, name: &str) -> Result<u64> {
-		reader
-			.seek(std::io::SeekFrom::Start(offset))
-			.read_err(format!("Cannot seek to {name} offset"))?;
-		let mut buf = [0_u8; 8];
-		reader
-			.read_exact(&mut buf)
-			.read_err(format!("Cannot read {name} bytes"))?;
-		Ok(u64::from_le_bytes(buf))
 	}
 
 	fn extract_xml(reader: &mut PagedReader, offset: u64, length: usize) -> Result<Vec<u8>> {

@@ -1,4 +1,3 @@
-use crate::bs_write::ByteStreamWriteBuffer;
 use crate::error::Converter;
 use crate::{Error, Result};
 use roxmltree::Node;
@@ -93,40 +92,7 @@ pub enum RecordValue {
 	Integer(i64),
 }
 
-impl Record {
-	pub(crate) fn xml_string(&self) -> String {
-		let tag_name = self.name.tag_name();
-		let (attrs, value) = serialize_record_type(&self.data_type);
-		format!("<{tag_name} {attrs}>{value}</{tag_name}>\n")
-	}
-}
-
 impl RecordName {
-	pub(crate) fn tag_name(&self) -> String {
-		String::from(match self {
-			RecordName::CartesianX => "cartesianX",
-			RecordName::CartesianY => "cartesianY",
-			RecordName::CartesianZ => "cartesianZ",
-			RecordName::CartesianInvalidState => "cartesianInvalidState",
-			RecordName::SphericalRange => "sphericalRange",
-			RecordName::SphericalAzimuth => "sphericalAzimuth",
-			RecordName::SphericalElevation => "sphericalElevation",
-			RecordName::SphericalInvalidState => "sphericalInvalidState",
-			RecordName::Intensity => "intensity",
-			RecordName::IsIntensityInvalid => "isIntensityInvalid",
-			RecordName::ColorRed => "colorRed",
-			RecordName::ColorGreen => "colorGreen",
-			RecordName::ColorBlue => "colorBlue",
-			RecordName::IsColorInvalid => "isColorInvalid",
-			RecordName::RowIndex => "rowIndex",
-			RecordName::ColumnIndex => "columnIndex",
-			RecordName::ReturnCount => "returnCount",
-			RecordName::ReturnIndex => "returnIndex",
-			RecordName::TimeStamp => "timeStamp",
-			RecordName::IsTimeStampInvalid => "isTimeStampInvalid",
-		})
-	}
-
 	pub(crate) fn from_tag_name(value: &str) -> Result<Self> {
 		Ok(match value {
 			"cartesianX" => RecordName::CartesianX,
@@ -204,66 +170,6 @@ impl RecordDataType {
 				"Unsupported type '{type_name}' in XML tag '{tag_name}' detected"
 			))?,
 		})
-	}
-
-	pub(crate) fn bit_size(&self) -> usize {
-		match self {
-			RecordDataType::Single { .. } => std::mem::size_of::<f32>() * 8,
-			RecordDataType::Double { .. } => std::mem::size_of::<f64>() * 8,
-			RecordDataType::ScaledInteger { min, max, .. } => integer_bits(*min, *max),
-			RecordDataType::Integer { min, max } => integer_bits(*min, *max),
-		}
-	}
-
-	pub(crate) fn write(&self, value: &RecordValue, buffer: &mut ByteStreamWriteBuffer) -> Result<()> {
-		match self {
-			RecordDataType::Single { .. } => {
-				if let RecordValue::Single(float) = value {
-					let bytes = float.to_le_bytes();
-					buffer.add_bytes(&bytes);
-				} else {
-					Error::invalid("Data type single only supports single values")?
-				}
-			},
-			RecordDataType::Double { .. } => {
-				if let RecordValue::Double(double) = value {
-					let bytes = double.to_le_bytes();
-					buffer.add_bytes(&bytes);
-				} else {
-					Error::invalid("Data type double only supports double values")?
-				}
-			},
-			RecordDataType::ScaledInteger { min, max, .. } => {
-				if let RecordValue::ScaledInteger(int) = value {
-					serialize_integer(*int, *min, *max, buffer);
-				} else {
-					Error::invalid("Data type scaled integer only supports scaled integer values")?
-				}
-			},
-			RecordDataType::Integer { min, max } => {
-				if let RecordValue::Integer(int) = value {
-					serialize_integer(*int, *min, *max, buffer);
-				} else {
-					Error::invalid("Data type integer only supports integer values")?
-				}
-			},
-		};
-		Ok(())
-	}
-
-	pub(crate) fn limits(&self) -> (Option<RecordValue>, Option<RecordValue>) {
-		match self {
-			RecordDataType::Single { min, max } => (min.map(RecordValue::Single), max.map(RecordValue::Single)),
-			RecordDataType::Double { min, max } => (min.map(RecordValue::Double), max.map(RecordValue::Double)),
-			RecordDataType::ScaledInteger { min, max, .. } => (
-				Some(RecordValue::ScaledInteger(*min)),
-				Some(RecordValue::ScaledInteger(*max)),
-			),
-			RecordDataType::Integer { min, max } => (
-				Some(RecordValue::Integer(*min)),
-				Some(RecordValue::Integer(*max)),
-			),
-		}
 	}
 }
 
@@ -348,20 +254,6 @@ impl Display for RecordValue {
 	}
 }
 
-#[inline]
-fn serialize_integer(value: i64, min: i64, max: i64, buffer: &mut ByteStreamWriteBuffer) {
-	let uint = (value - min) as u64;
-	let data = uint.to_le_bytes();
-	let bits = integer_bits(min, max);
-	buffer.add_bits(&data, bits);
-}
-
-#[inline]
-fn integer_bits(min: i64, max: i64) -> usize {
-	let range = max - min;
-	f64::ceil(f64::log2(range as f64 + 1.0)) as usize
-}
-
 fn optional_attribute<T>(node: &Node, attribute: &str, tag_name: &str, type_name: &str) -> Result<Option<T>>
 where
 	T: FromStr,
@@ -386,41 +278,6 @@ where
 	value.invalid_err(format!(
 		"Cannot find '{attribute}' for type '{type_name}' in XML tag '{tag_name}'"
 	))
-}
-
-fn serialize_record_type(rt: &RecordDataType) -> (String, String) {
-	match rt {
-		RecordDataType::Single { min, max } => {
-			let mut str = String::from("type=\"Float\" precision=\"single\"");
-			if let Some(min) = min {
-				str += &format!(" minimum=\"{min}\"");
-			}
-			if let Some(max) = max {
-				str += &format!(" maximum=\"{max}\"");
-			}
-			let value = min.unwrap_or(0.0).to_string();
-			(str, value)
-		},
-		RecordDataType::Double { min, max } => {
-			let mut str = String::from("type=\"Float\"");
-			if let Some(min) = min {
-				str += &format!(" minimum=\"{min}\"");
-			}
-			if let Some(max) = max {
-				str += &format!(" maximum=\"{max}\"");
-			}
-			let value = min.unwrap_or(0.0).to_string();
-			(str, value)
-		},
-		RecordDataType::ScaledInteger { min, max, scale } => (
-			format!("type=\"ScaledInteger\" minimum=\"{min}\" maximum=\"{max}\"  scale=\"{scale}\""),
-			min.to_string(),
-		),
-		RecordDataType::Integer { min, max } => (
-			format!("type=\"Integer\" minimum=\"{min}\" maximum=\"{max}\""),
-			min.to_string(),
-		),
-	}
 }
 
 impl RecordDataType {

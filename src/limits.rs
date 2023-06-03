@@ -1,6 +1,5 @@
 use crate::error::Converter;
 use crate::Error;
-use crate::RecordDataType;
 use crate::RecordValue;
 use crate::Result;
 use roxmltree::Node;
@@ -60,23 +59,6 @@ impl IntensityLimits {
 		let intensity_max = extract_limit(node, "intenstiyMaximum")?;
 		Ok(Self { intensity_min, intensity_max })
 	}
-
-	pub(crate) fn from_record_type(data_type: &RecordDataType) -> Self {
-		let (intensity_min, intensity_max) = data_type.limits();
-		Self { intensity_min, intensity_max }
-	}
-
-	pub(crate) fn xml_string(&self) -> String {
-		let mut xml = String::from("<intensityLimits type=\"Structure\">");
-		if let Some(min) = &self.intensity_min {
-			xml += &format!("<intensityMinimum type=\"Integer\">{min}</intensityMinimum>");
-		}
-		if let Some(max) = &self.intensity_max {
-			xml += &format!("<intenstiyMaximum type=\"Integer\">{max}</intenstiyMaximum>");
-		}
-		xml += "</intensityLimits>";
-		xml
-	}
 }
 
 /// Optional minimum and maximum values for the colors red, green and blue.
@@ -106,43 +88,5 @@ impl ColorLimits {
 			blue_min,
 			blue_max,
 		})
-	}
-
-	pub(crate) fn from_record_types(red: &RecordDataType, green: &RecordDataType, blue: &RecordDataType) -> Self {
-		let (red_min, red_max) = red.limits();
-		let (green_min, green_max) = green.limits();
-		let (blue_min, blue_max) = blue.limits();
-		Self {
-			red_min,
-			red_max,
-			green_min,
-			green_max,
-			blue_min,
-			blue_max,
-		}
-	}
-
-	pub(crate) fn xml_string(&self) -> String {
-		let mut xml = String::from("<colorLimits type=\"Structure\">");
-		if let Some(min) = &self.red_min {
-			xml += &format!("<colorRedMinimum type=\"Integer\">{min}</colorRedMinimum>");
-		}
-		if let Some(max) = &self.red_max {
-			xml += &format!("<colorRedMaximum type=\"Integer\">{max}</colorRedMaximum>");
-		}
-		if let Some(min) = &self.green_min {
-			xml += &format!("<colorGreenMinimum type=\"Integer\">{min}</colorGreenMinimum>");
-		}
-		if let Some(max) = &self.green_max {
-			xml += &format!("<colorGreenMaximum type=\"Integer\">{max}</colorGreenMaximum>");
-		}
-		if let Some(min) = &self.blue_min {
-			xml += &format!("<colorBlueMinimum type=\"Integer\">{min}</colorBlueMinimum>");
-		}
-		if let Some(max) = &self.blue_max {
-			xml += &format!("<colorBlueMaximum type=\"Integer\">{max}</colorBlueMaximum>");
-		}
-		xml += "</colorLimits>";
-		xml
 	}
 }

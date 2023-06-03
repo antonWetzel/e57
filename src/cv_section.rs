@@ -4,7 +4,6 @@ use crate::paged_reader::PagedReader;
 use crate::Error;
 use crate::Result;
 use std::io::Read;
-use std::io::Write;
 
 #[derive(Debug)]
 pub struct CompressedVectorSectionHeader {
@@ -38,17 +37,6 @@ impl CompressedVectorSectionHeader {
 		}
 
 		Ok(header)
-	}
-
-	pub fn write(&self, writer: &mut dyn Write) -> Result<()> {
-		let mut buffer = [0_u8; Self::SIZE as usize];
-		buffer[0] = self.section_id;
-		buffer[8..16].copy_from_slice(&self.section_length.to_le_bytes());
-		buffer[16..24].copy_from_slice(&self.data_offset.to_le_bytes());
-		buffer[24..32].copy_from_slice(&self.index_offset.to_le_bytes());
-		writer
-			.write_all(&buffer)
-			.write_err("Failed to write compressed vector section header")
 	}
 }
 

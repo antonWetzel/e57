@@ -24,30 +24,6 @@ impl CartesianBounds {
 		let z_max = optional_double(node, "zMaximum")?;
 		Ok(Self { x_min, x_max, y_min, y_max, z_min, z_max })
 	}
-
-	pub(crate) fn xml_string(&self) -> String {
-		let mut xml = String::from("<cartesianBounds type=\"Structure\">");
-		if let Some(min) = self.x_min {
-			xml += &format!("<xMinimum type=\"Float\">{min}</xMinimum>");
-		}
-		if let Some(max) = self.x_max {
-			xml += &format!("<xMaximum type=\"Float\">{max}</xMaximum>");
-		}
-		if let Some(min) = self.y_min {
-			xml += &format!("<yMinimum type=\"Float\">{min}</yMinimum>");
-		}
-		if let Some(max) = self.y_max {
-			xml += &format!("<yMaximum type=\"Float\">{max}</yMaximum>");
-		}
-		if let Some(min) = self.z_min {
-			xml += &format!("<zMinimum type=\"Float\">{min}</zMinimum>");
-		}
-		if let Some(max) = self.z_max {
-			xml += &format!("<zMaximum type=\"Float\">{max}</zMaximum>");
-		}
-		xml += "</cartesianBounds>";
-		xml
-	}
 }
 
 /// Optional minimum and maximum values for spherical coordinates.
@@ -78,30 +54,6 @@ impl SphericalBounds {
 			azimuth_end,
 		})
 	}
-
-	pub(crate) fn xml_string(&self) -> String {
-		let mut xml = String::from("<sphericalBounds type=\"Structure\">");
-		if let Some(min) = self.azimuth_start {
-			xml += &format!("<azimuthStart type=\"Float\">{min}</azimuthStart>");
-		}
-		if let Some(max) = self.azimuth_end {
-			xml += &format!("<azimuthEnd type=\"Float\">{max}</azimuthEnd>");
-		}
-		if let Some(min) = self.elevation_min {
-			xml += &format!("<elevationMinimum type=\"Float\">{min}</elevationMinimum>");
-		}
-		if let Some(max) = self.elevation_max {
-			xml += &format!("<elevationMaximum type=\"Float\">{max}</elevationMaximum>");
-		}
-		if let Some(min) = self.range_min {
-			xml += &format!("<rangeMinimum type=\"Float\">{min}</rangeMinimum>");
-		}
-		if let Some(max) = self.range_max {
-			xml += &format!("<rangeMaximum type=\"Float\">{max}</rangeMaximum>");
-		}
-		xml += "</sphericalBounds>";
-		xml
-	}
 }
 
 /// Optional minimum and maximum values for the row, column and return indices.
@@ -131,29 +83,5 @@ impl IndexBounds {
 			return_min,
 			return_max,
 		})
-	}
-
-	pub(crate) fn xml_string(&self) -> String {
-		let mut xml = String::from("<indexBounds type=\"Structure\">");
-		if let Some(min) = self.row_min {
-			xml += &format!("<rowMinimum type=\"Integer\">{min}</rowMinimum>");
-		}
-		if let Some(max) = self.row_max {
-			xml += &format!("<rowMaximum type=\"Integer\">{max}</rowMaximum>");
-		}
-		if let Some(min) = self.column_min {
-			xml += &format!("<columnMinimum type=\"Integer\">{min}</columnMinimum>");
-		}
-		if let Some(max) = self.column_max {
-			xml += &format!("<columnMaximum type=\"Integer\">{max}</columnMaximum>");
-		}
-		if let Some(min) = self.return_min {
-			xml += &format!("<returnMinimum type=\"Integer\">{min}</returnMinimum>");
-		}
-		if let Some(max) = self.return_max {
-			xml += &format!("<returnMaximum type=\"Integer\">{max}</returnMaximum>");
-		}
-		xml += "</indexBounds>";
-		xml
 	}
 }

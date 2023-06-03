@@ -1,5 +1,5 @@
 use crate::error::Converter;
-use crate::xml::{generate_f64_xml, required_double};
+use crate::xml::required_double;
 use crate::Result;
 use roxmltree::Node;
 
@@ -64,19 +64,4 @@ pub fn translation_from_node(node: &Node) -> Result<Translation> {
 	let y = required_double(node, "y")?;
 	let z = required_double(node, "z")?;
 	Ok(Translation { x, y, z })
-}
-
-pub fn serialize_transform(transform: &Transform, tag_name: &str) -> String {
-	let w = generate_f64_xml("w", transform.rotation.w);
-	let x = generate_f64_xml("x", transform.rotation.x);
-	let y = generate_f64_xml("y", transform.rotation.y);
-	let z = generate_f64_xml("z", transform.rotation.z);
-	let quat = format!("<rotation type=\"Structure\">{w}{x}{y}{z}</rotation>\n");
-
-	let x = generate_f64_xml("x", transform.translation.x);
-	let y = generate_f64_xml("y", transform.translation.y);
-	let z = generate_f64_xml("z", transform.translation.z);
-	let trans = format!("<translation type=\"Structure\">{x}{y}{z}</translation>\n");
-
-	format!("<{tag_name} type=\"Structure\">{quat}{trans}</{tag_name}>\n")
 }

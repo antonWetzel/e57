@@ -5,23 +5,6 @@ pub struct Crc32 {
 }
 
 impl Crc32 {
-	pub fn new() -> Self {
-		let mut table = [0_u32; 256];
-		for i in 0..256 {
-			let mut val = i;
-			for _ in 0..8 {
-				if val % 2 == 0 {
-					val /= 2;
-				} else {
-					val /= 2;
-					val ^= 0x82_F6_3B_78;
-				}
-			}
-			table[i as usize] = val;
-		}
-		Self { table }
-	}
-
 	pub fn calculate(&mut self, data: &[u8]) -> u32 {
 		!data.iter().fold(!0, |sum, &next| {
 			let index = (sum ^ next as u32) as u8;
