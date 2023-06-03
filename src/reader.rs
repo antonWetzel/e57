@@ -1,11 +1,14 @@
 use crate::mmap_paged;
 use crate::pc_reader::PointCloudReader;
+use crate::pc_reader::PropertyReader;
 use crate::pointcloud::pointclouds_from_document;
 use crate::root::root_from_document;
 use crate::root::Root;
 use crate::Error;
 use crate::Header;
 use crate::PointCloud;
+use crate::RecordDataType;
+use crate::RecordName;
 use roxmltree::Document;
 use std::fs::File;
 use std::path::Path;
@@ -60,8 +63,18 @@ impl Reader {
 	}
 
 	/// Returns an iterator for the requested point cloud.
-	pub fn pointcloud(&mut self, pc: &PointCloud) -> Result<PointCloudReader, Error> {
-		PointCloudReader::new(pc, &self.mmap)
+	pub fn pointcloud<F, Point>(&mut self, pc: &PointCloud, f: F) -> Result<PointCloudReader<Point>, Error>
+	where
+		Point: Default,
+		F: Fn(
+			RecordName,
+			RecordDataType,
+			usize,
+			usize,
+			&memmap2::Mmap,
+		) -> Result<Option<Box<dyn PropertyReader<Point>>>, Error>,
+	{
+		PointCloudReader::new(pc, &self.mmap, f)
 	}
 
 	/// Returns the optional coordinate system metadata.

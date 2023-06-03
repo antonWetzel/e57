@@ -2,7 +2,8 @@ use crate::error::INTERNAL_ERROR;
 use crate::Error;
 use std::io::Read;
 
-const SIGNATURE: [u8; 8] = [b'A', b'S', b'T', b'M', b'-', b'E', b'5', b'7'];
+// const SIGNATURE: [u8; 8] = [b'A', b'S', b'T', b'M', b'-', b'E', b'5', b'7'];
+const SIGNATURE: &[u8; 8] = b"ASTM-E57";
 const MAJOR_VERSION: u32 = 1;
 const MINOR_VERSION: u32 = 0;
 const PAGE_SIZE: u64 = 1024;
@@ -49,7 +50,7 @@ impl Header {
 			page_size:       u64::from_le_bytes(data[40..48].try_into().expect(INTERNAL_ERROR)),
 		};
 
-		if header.signature != SIGNATURE {
+		if &header.signature != SIGNATURE {
 			return Error::Invalid("Found unsupported signature in header".into()).throw();
 		}
 		if header.major != MAJOR_VERSION {
@@ -63,19 +64,5 @@ impl Header {
 		}
 
 		Ok(header)
-	}
-}
-
-impl Default for Header {
-	fn default() -> Self {
-		Self {
-			signature:       SIGNATURE,
-			major:           MAJOR_VERSION,
-			minor:           MINOR_VERSION,
-			phys_length:     0,
-			phys_xml_offset: 0,
-			xml_length:      0,
-			page_size:       PAGE_SIZE,
-		}
 	}
 }
