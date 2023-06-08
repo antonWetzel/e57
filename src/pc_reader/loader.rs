@@ -1,6 +1,5 @@
 use crate::{error::INTERNAL_ERROR, Error};
 
-// todo: use
 const ALIGNMENT_SIZE: usize = 4;
 const PHYSICAL_PAGE_SIZE: usize = 1024;
 const LOGICAL_PAGE_SIZE: usize = PHYSICAL_PAGE_SIZE - ALIGNMENT_SIZE;
