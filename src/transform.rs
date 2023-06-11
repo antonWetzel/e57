@@ -36,22 +36,15 @@ pub struct Transform {
 }
 
 pub fn transform_from_node(node: &Node) -> Result<Transform, Error> {
-	let translation = node
-		.children()
-		.find(|n| n.has_tag_name("translation"))
-		.ok_or(Error::Invalid(
-			"Cannot find translation tag of transform".into(),
-		))?;
-	let quaternion = node
-		.children()
-		.find(|n| n.has_tag_name("rotation"))
-		.ok_or(Error::Invalid(
-			"Cannot find quaternion tag of transform".into(),
-		))?;
-	Ok(Transform {
-		rotation:    quaternion_from_node(&quaternion)?,
-		translation: translation_from_node(&translation)?,
-	})
+	let translation = match node.children().find(|n| n.has_tag_name("translation")) {
+		Some(node) => translation_from_node(&node)?,
+		None => Translation { x: 0.0, y: 0.0, z: 0.0 },
+	};
+	let rotation = match node.children().find(|n| n.has_tag_name("rotation")) {
+		None => Quaternion { w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
+		Some(node) => quaternion_from_node(&node)?,
+	};
+	Ok(Transform { rotation, translation })
 }
 
 pub fn quaternion_from_node(node: &Node) -> Result<Quaternion, Error> {
